@@ -43,6 +43,7 @@ export interface PatientRowData {
   pendingAckCount: number;
   inProgressCount: number;
   allResolved: boolean;
+  history: number[];
 }
 
 export function PatientRow({
@@ -53,7 +54,6 @@ export function PatientRow({
   patient: PatientRowData;
   rank: number;
   onOpen: (id: string) => void;
-  history: number[];
 }) {
   const s = STATUS_STYLES[patient.status];
   const hasVent =
