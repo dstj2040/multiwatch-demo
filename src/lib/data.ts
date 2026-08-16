@@ -163,3 +163,91 @@ export async function fetchAuditLog(limit = 100): Promise<AuditLogRow[]> {
       : null,
   }));
 }
+
+export interface ExecutiveAlertStat {
+  stat_date: string;
+  total_alerts: number;
+  critical_count: number;
+  warning_count: number;
+  resolved_count: number;
+  escalated_count: number;
+}
+
+export async function fetchExecutiveStats(): Promise<ExecutiveAlertStat[]> {
+  const { data, error } = await supabase
+    .from("executive_alert_stats_daily")
+    .select("*");
+  if (error) throw error;
+  return data ?? [];
+}
+
+export interface StaffDirectoryRow {
+  id: string;
+  full_name: string;
+  role: string;
+  ward_name: string | null;
+  created_at: string;
+}
+
+export async function fetchStaffDirectory(): Promise<StaffDirectoryRow[]> {
+  const { data, error } = await supabase
+    .from("staff_directory")
+    .select("*")
+    .order("full_name");
+  if (error) throw error;
+  return data ?? [];
+}
+
+export interface WardOption {
+  id: string;
+  name: string;
+}
+
+export async function fetchWards(): Promise<WardOption[]> {
+  const { data, error } = await supabase
+    .from("wards")
+    .select("id, name")
+    .order("name");
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function updateStaffRoleWard(
+  staffId: string,
+  role: string,
+  wardId: string | null,
+) {
+  const { data, error } = await supabase
+    .from("staff_profiles")
+    .update({ role, ward_id: wardId })
+    .eq("id", staffId)
+    .select();
+  if (error) throw error;
+  if (!data || data.length === 0)
+    throw new Error("ไม่มีสิทธิ์แก้ไขบัญชีนี้ (เช็ค role ของบัญชีที่ login)");
+}
+
+export interface WardRanking {
+  ward_id: string;
+  ward_name: string;
+  total_alerts: number;
+  critical_count: number;
+  warning_count: number;
+}
+
+export async function fetchWardRanking(): Promise<WardRanking[]> {
+  const { data, error } = await supabase
+    .from("executive_ward_ranking")
+    .select("*");
+  if (error) throw error;
+  return data ?? [];
+}
+export async function escalateAlert(alertId: number) {
+  const { data, error } = await supabase
+    .from("alerts")
+    .update({ escalated: true, escalated_at: new Date().toISOString() })
+    .eq("id", alertId)
+    .select();
+  if (error) throw error;
+  if (!data || data.length === 0) throw new Error("ไม่มีสิทธิ์ escalate alert นี้ (เช็ค role ของบัญชีที่ login)");
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { PatientRow, type PatientRowData } from "@/components/PatientRow";
 import { PatientDetail } from "@/components/PatientDetail";
 import {
@@ -12,6 +13,7 @@ import {
   acknowledgeAlert,
   resolveAlert,
   signOut,
+  escalateAlert,
 } from "@/lib/data";
 import { severityScore, overallStatus } from "@/lib/status";
 import { createClient } from "@/lib/supabase/client";
@@ -25,6 +27,7 @@ import type {
 import { Wind, Droplet, Activity, AlertTriangle, Bell } from "lucide-react";
 import Link from "next/link";
 import { ClipboardList } from "lucide-react";
+import {  Users } from "lucide-react";
 
 const supabase = createClient();
 
@@ -37,6 +40,7 @@ interface PatientFull {
 }
 
 export default function Home() {
+  const router = useRouter();
   const [staff, setStaff] = useState<StaffProfile | null>(null);
   const [patients, setPatients] = useState<PatientFull[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -78,6 +82,14 @@ export default function Home() {
       cancelled = true;
     };
   }, [loadAll]);
+
+  useEffect(() => {
+    if (staff?.role === "admin") {
+      router.replace("/admin/users");
+    } else if (staff?.role === "executive") {
+    router.replace("/executive");
+    }
+  }, [staff, router]);
 
   // Realtime — มีอะไรเปลี่ยนก็โหลดใหม่หมด (ตามที่อธิบายไว้ด้านบน)
   useEffect(() => {
@@ -134,6 +146,35 @@ export default function Home() {
       loadAll(); // ถ้า error ให้โหลดข้อมูลจริงกลับมา ยกเลิก optimistic update ที่ผิดพลาด
     }
   }
+  async function handleEscalate(alertId: number) {
+  if (!staff) {
+    alert("ไม่พบข้อมูลผู้ใช้ที่ login อยู่");
+    return;
+  }
+
+  // อัปเดตหน้าจอทันที ไม่ต้องรอ Supabase ตอบกลับ
+  const now = new Date().toISOString();
+  setPatients((prev) =>
+    prev.map((p) => ({
+      ...p,
+      alerts: p.alerts.map((a) =>
+        a.id === alertId
+          ? { ...a, escalated: true, escalated_at: now }
+          : a,
+      ),
+    })),
+  );
+
+  try {
+    await escalateAlert(alertId);
+  } catch (e) {
+    alert(
+      "ส่งต่อทีมฉุกเฉินไม่สำเร็จ: " +
+        (e instanceof Error ? e.message : "unknown error"),
+    );
+    loadAll(); // ถ้า error ให้โหลดข้อมูลจริงกลับมา ยกเลิก optimistic update ที่ผิดพลาด
+  }
+}
 
   async function handleResolve(alertId: number, note: string) {
     if (!staff) {
@@ -250,11 +291,20 @@ export default function Home() {
           >
             <ClipboardList size={16} />
           </Link>
+          {staff?.role === "admin" && (
+            <Link
+              href="/admin/users"
+              className="p-2 rounded-md border border-slate-800 hover:bg-slate-900 text-white"
+              title="จัดการบัญชีผู้ใช้งาน"
+            >
+              <Users size={16} />
+            </Link>
+          )}
           <button
             onClick={() =>
               signOut().then(() => (window.location.href = "/login"))
             }
-            className="text-[11px] text-red-400 border border-slate-800 rounded-md px-3 py-2 hover:bg-slate-900"
+            className="text-[11px] text-red-300 border border-slate-800 rounded-md px-3 py-2 hover:bg-slate-900"
           >
             ออกจากระบบ
           </button>
@@ -440,6 +490,7 @@ export default function Home() {
           onClose={() => setSelectedId(null)}
           onAcknowledge={handleAcknowledge}
           onResolve={handleResolve}
+          onEscalate={handleEscalate}
         />
       )}
     </div>

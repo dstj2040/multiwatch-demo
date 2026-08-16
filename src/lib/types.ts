@@ -1,12 +1,6 @@
 export type MonitorType = "vent" | "iv" | "both";
 
-export type StaffRole =
-  | "nurse"
-  | "physician"
-  | "nurse_manager"
-  | "rapid_response"
-  | "biomed_it"
-  | "admin";
+export type StaffRole = "nurse" | "physician" | "nurse_manager" | "rapid_response" | "biomed_it" | "executive" | "admin";
 
 export interface Ward {
   id: string;

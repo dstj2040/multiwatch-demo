@@ -30,7 +30,7 @@ export default function LoginPage() {
       } else {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        setInfo("สมัครสำเร็จ — บัญชีนี้เป็น role 'nurse' โดยยังไม่ผูก ward ต้องแจ้งผู้ดูแลระบบก่อนใช้งานได้");
+        setInfo("สมัครสำเร็จ — กรุณาตรวจสอบอีเมลและกดลิงก์ยืนยันก่อนเข้าสู่ระบบ จากนั้นแจ้งผู้ดูแลระบบให้กำหนดบทบาทและหอผู้ป่วยให้บัญชีนี้");
         setMode("signin");
       }
     } catch (err) {
