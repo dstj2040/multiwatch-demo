@@ -84,12 +84,18 @@ export default function Home() {
   }, [loadAll]);
 
   useEffect(() => {
-    if (staff?.role === "admin") {
-      router.replace("/admin/users");
-    } else if (staff?.role === "executive") {
+  if (loading) return; // รอโหลดข้อมูลให้เสร็จก่อน ไม่งั้นจะ redirect เร็วเกินไปตอน staff ยังเป็น null ชั่วคราว
+
+  if (!staff) {
+    router.replace("/login");
+    return;
+  }
+  if (staff.role === "admin") {
+    router.replace("/admin/users");
+  } else if (staff.role === "executive") {
     router.replace("/executive");
-    }
-  }, [staff, router]);
+  }
+}, [staff, loading, router]);
 
   // Realtime — มีอะไรเปลี่ยนก็โหลดใหม่หมด (ตามที่อธิบายไว้ด้านบน)
   useEffect(() => {
