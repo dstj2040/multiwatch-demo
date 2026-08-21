@@ -190,10 +190,10 @@ export function PatientDetail({
                           {!a.escalated && !isResolved && (
                             <button
                               onClick={() => onEscalate(a.id)}
-                              title="ส่งต่อให้ทีม Rapid Response ทันที ไม่ต้องรอเวลา"
+                              title="ส่งต่อการแจ้งเตือนไปยังผู้รับผิดชอบในระดับถัดไป"
                               className="text-[10px] font-medium text-amber-200 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded-full px-2 py-1"
                             >
-                              ส่งต่อทีมฉุกเฉิน
+                              ส่งต่อเคส
                             </button>
                           )}
                           {!isAck && (
