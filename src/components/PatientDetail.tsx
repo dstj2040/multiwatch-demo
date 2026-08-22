@@ -216,7 +216,7 @@ export function PatientDetail({
 
                       {a.escalated && !isResolved && (
                         <p className="text-[10px] text-amber-400 pl-6 mt-1">
-                          ⚠ ส่งต่อทีม Rapid Response แล้ว
+                          ⚠ ส่งต่อการแจ้งเตือนไปยังผู้รับผิดชอบในระดับถัดไปแล้ว
                         </p>
                       )}
                       {!isAck && (
