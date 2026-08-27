@@ -6,6 +6,7 @@ import { VitalTile } from "@/components/VitalTile";
 import { IVFluidCard } from "@/components/IVFluidcard";
 import { ventParamStatus } from "@/lib/status";
 import type { AlertRow } from "@/lib/types";
+import { WaveSparkline } from "@/components/WaveSparkline";
 
 const STATUS_STYLES = {
   normal: {
@@ -67,7 +68,7 @@ export interface PatientDetailProps {
   onClose: () => void;
   onAcknowledge: (alertId: number) => void;
   onResolve: (alertId: number, note: string) => void;
-  onEscalate: (alertId: number) => void;   // ← ย้ายมาอยู่ตรงนี้แทน
+  onEscalate: (alertId: number) => void; // ← ย้ายมาอยู่ตรงนี้แทน
 }
 
 export function PatientDetail({
@@ -319,6 +320,7 @@ export function PatientDetail({
                 rateMlHr={iv.rate_ml_hr}
                 pumpStatus={iv.status}
               />
+              
             </div>
           )}
         </div>

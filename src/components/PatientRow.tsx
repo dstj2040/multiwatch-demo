@@ -1,6 +1,5 @@
 import { ChevronRight } from "lucide-react";
 import type { Status } from "@/lib/status";
-import { WaveSparkline } from "@/components/WaveSparkline";
 
 const STATUS_STYLES: Record<
   Status,
@@ -120,16 +119,7 @@ export function PatientRow({
             {patient.pendingAckCount} รอรับทราบ
           </span>
         )}
-        <div className="hidden sm:block w-24 shrink-0">
-  <WaveSparkline
-    data={patient.history}
-    color={
-      patient.status === "critical" ? "#fb7185" :
-      patient.status === "warning" ? "#fbbf24" : "#34d399"
-    }
-    height={28}
-  />
-</div>
+        
         {patient.pendingAckCount === 0 && patient.inProgressCount > 0 && (
           <span className="text-[11px] font-medium text-slate-300 bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-full">
             {patient.inProgressCount} กำลังดำเนินการ

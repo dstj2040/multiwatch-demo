@@ -8,7 +8,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
-const TICK_MS = 1200;
+const TICK_MS = 3000;
 
 function clamp(v, lo, hi) {
   return Math.min(hi, Math.max(lo, v));
@@ -167,7 +167,7 @@ async function tick(patient) {
     s.vitals.tidal_volume = clamp(
       randomWalk(s.vitals.tidal_volume, 8, drift.tidal_volume || 0),
       260,
-      620,
+      480,
     );
     s.vitals.resp_rate = clamp(
       randomWalk(s.vitals.resp_rate, 0.8, drift.resp_rate || 0),
