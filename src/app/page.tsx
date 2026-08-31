@@ -287,9 +287,7 @@ export default function Home() {
               <span className="text-slate-600">({staff.role})</span>
             </span>
           )}
-          <button className="p-2 rounded-md border border-slate-800 hover:bg-slate-900 text-yellow-200">
-            <Bell size={16} />
-          </button>
+          
           <Link
             href="/audit"
             className="p-2 rounded-md border border-slate-800 hover:bg-slate-900 text-white"
