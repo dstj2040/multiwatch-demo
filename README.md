@@ -1,36 +1,36 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MultiWatch (demo)
 
-## Getting Started
+แดชบอร์ดเฝ้าระวังเครื่องช่วยหายใจ + IV pump แบบ realtime — Next.js 16 + Supabase
 
-First, run the development server:
+## โหมด demo ทำงานยังไง
+
+- **ไม่มีล็อกอิน** เปิดมาเห็นแดชบอร์ดทุกเตียงทันที (สมมติวอร์ดเดียว)
+- **เบราว์เซอร์อ่านได้อย่างเดียว** — RLS เปิดแค่ `SELECT` ให้ anon
+- **ปุ่ม acknowledge / resolve / escalate** ยิงไป `POST /api/alerts` ซึ่งเขียน DB ด้วย service role
+  ในนาม "พยาบาล demo" (`DEMO_STAFF_ID`) มีตรวจ origin, validate input และ rate limit
+- **ข้อมูลกราฟ** สร้างโดย `sim.tick()` ใน Postgres รันด้วย **pg_cron ทุก 5 วินาที**
+  และ `sim.cleanup()` ทุก 10 นาที ลบข้อมูลเก่ากันฐานข้อมูลเต็ม
+  (schema `sim` ไม่ได้เปิดผ่าน API — เรียกจากภายนอกไม่ได้)
+- Role เหลือ `nurse` อย่างเดียว (บังคับด้วย constraint ใน DB)
+
+`scripts/simulate-writer.mjs` เลิกใช้แล้ว — อย่ารันพร้อม pg_cron ไม่งั้นข้อมูลจะซ้อนกัน
+
+## ติดตั้ง (ครั้งแรก)
+
+1. Supabase → SQL Editor → รัน `supabase/migrations/20261102_demo_mode.sql`
+2. ทำตาม `supabase/setup-demo-staff.sql` (สร้างบัญชีพยาบาล demo + ตรวจ cron)
+3. Supabase → Authentication → Sign In / Providers → **ปิด Allow new users to sign up**
+4. Vercel → Settings → Environment Variables (ดู `.env.example`)
+   - `SUPABASE_SERVICE_ROLE_KEY` — **ห้าม** ขึ้นต้นด้วย `NEXT_PUBLIC_`
+   - `DEMO_STAFF_ID`
+5. Redeploy
+
+## พัฒนาในเครื่อง
 
 ```bash
+cp .env.example .env.local   # เติมค่า
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+threshold ของสัญญาณชีพอยู่ 2 ที่ ต้องแก้ให้ตรงกัน: `src/lib/status.ts` และ `sim.check_vent()` ใน migration

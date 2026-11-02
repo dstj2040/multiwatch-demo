@@ -1,47 +1,36 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PatientRow, type PatientRowData } from "@/components/PatientRow";
 import { PatientDetail } from "@/components/PatientDetail";
 import {
-  fetchPatients,
-  fetchVitalsHistory,
-  fetchIVHistory,
-  fetchAlerts,
-  fetchCurrentStaff,
+  fetchDashboard,
   acknowledgeAlert,
   resolveAlert,
-  signOut,
   escalateAlert,
+  type DashboardPatient,
 } from "@/lib/data";
 import { severityScore, overallStatus } from "@/lib/status";
 import { createClient } from "@/lib/supabase/client";
-import type {
-  Patient,
-  VitalsReading,
-  IVReading,
-  AlertRow,
-  StaffProfile,
-} from "@/lib/types";
-import { Wind, Droplet, Activity, AlertTriangle, Bell } from "lucide-react";
+import type { AlertRow } from "@/lib/types";
+import {
+  Wind,
+  Droplet,
+  Activity,
+  AlertTriangle,
+  ClipboardList,
+} from "lucide-react";
 import Link from "next/link";
-import { ClipboardList } from "lucide-react";
-import {  Users } from "lucide-react";
 
 const supabase = createClient();
 
 // ข้อมูลของผู้ป่วย 1 คน รวมทุกอย่างที่ต้องใช้ทั้งแถวในลิสต์และหน้า detail
-interface PatientFull {
-  patient: Patient;
-  vitalsHistory: VitalsReading[];
-  ivHistory: IVReading[];
-  alerts: AlertRow[];
-}
+type PatientFull = DashboardPatient;
+
+// ตัวจำลองเขียนข้อมูลทุก 5 วิ (หลายแถวต่อรอบ) — รวบ event ให้เหลือโหลดใหม่ครั้งเดียว
+const RELOAD_DEBOUNCE_MS = 800;
 
 export default function Home() {
-  const router = useRouter();
-  const [staff, setStaff] = useState<StaffProfile | null>(null);
   const [patients, setPatients] = useState<PatientFull[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,21 +38,7 @@ export default function Home() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [currentStaff, patientList] = await Promise.all([
-        fetchCurrentStaff(),
-        fetchPatients(),
-      ]);
-      setStaff(currentStaff);
-
-      const full = await Promise.all(
-        patientList.map(async (p) => ({
-          patient: p,
-          vitalsHistory: await fetchVitalsHistory(p.id, 30),
-          ivHistory: await fetchIVHistory(p.id, 30),
-          alerts: await fetchAlerts(p.id, 20),
-        })),
-      );
-      setPatients(full);
+      setPatients(await fetchDashboard(30, 20));
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "โหลดข้อมูลไม่สำเร็จ");
@@ -83,137 +58,77 @@ export default function Home() {
     };
   }, [loadAll]);
 
+  // Realtime — มีอะไรเปลี่ยนก็โหลดใหม่ (หน่วงไว้ไม่ให้โหลดซ้ำรัวๆ)
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-  if (loading) return; // รอโหลดข้อมูลให้เสร็จก่อน ไม่งั้นจะ redirect เร็วเกินไปตอน staff ยังเป็น null ชั่วคราว
+    const scheduleReload = () => {
+      if (reloadTimer.current) return;
+      reloadTimer.current = setTimeout(() => {
+        reloadTimer.current = null;
+        loadAll();
+      }, RELOAD_DEBOUNCE_MS);
+    };
 
-  if (!staff) {
-    router.replace("/login");
-    return;
-  }
-  if (staff.role === "admin") {
-    router.replace("/admin/users");
-  } else if (staff.role === "executive") {
-    router.replace("/executive");
-  }
-}, [staff, loading, router]);
-
-  // Realtime — มีอะไรเปลี่ยนก็โหลดใหม่หมด (ตามที่อธิบายไว้ด้านบน)
-  useEffect(() => {
     const channel = supabase
       .channel("dashboard-live")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "alerts" },
-        () => loadAll(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "vitals_readings" },
-        () => loadAll(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "iv_readings" },
-        () => loadAll(),
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "alerts" }, scheduleReload)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "vitals_readings" }, scheduleReload)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "iv_readings" }, scheduleReload)
       .subscribe();
 
     return () => {
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+      reloadTimer.current = null;
       supabase.removeChannel(channel);
     };
   }, [loadAll]);
 
-  async function handleAcknowledge(alertId: number) {
-    if (!staff) {
-      alert("ไม่พบข้อมูลผู้ใช้ที่ login อยู่");
-      return;
-    }
-
-    // อัปเดตหน้าจอทันที ไม่ต้องรอ Supabase ตอบกลับ
-    const now = new Date().toISOString();
+  // อัปเดตหน้าจอทันที แล้วค่อยส่งไป server — ถ้าพลาดให้โหลดของจริงกลับมา
+  async function runAction(
+    alertId: number,
+    patch: Partial<AlertRow>,
+    action: () => Promise<void>,
+    failLabel: string,
+  ) {
     setPatients((prev) =>
       prev.map((p) => ({
         ...p,
-        alerts: p.alerts.map((a) =>
-          a.id === alertId
-            ? { ...a, acknowledged_at: now, acknowledged_by: staff.id }
-            : a,
-        ),
+        alerts: p.alerts.map((a) => (a.id === alertId ? { ...a, ...patch } : a)),
       })),
     );
-
     try {
-      await acknowledgeAlert(alertId, staff.id);
+      await action();
     } catch (e) {
-      alert(
-        "Acknowledge ไม่สำเร็จ: " +
-          (e instanceof Error ? e.message : "unknown error"),
-      );
-      loadAll(); // ถ้า error ให้โหลดข้อมูลจริงกลับมา ยกเลิก optimistic update ที่ผิดพลาด
-    }
-  }
-  async function handleEscalate(alertId: number) {
-  if (!staff) {
-    alert("ไม่พบข้อมูลผู้ใช้ที่ login อยู่");
-    return;
-  }
-
-  // อัปเดตหน้าจอทันที ไม่ต้องรอ Supabase ตอบกลับ
-  const now = new Date().toISOString();
-  setPatients((prev) =>
-    prev.map((p) => ({
-      ...p,
-      alerts: p.alerts.map((a) =>
-        a.id === alertId
-          ? { ...a, escalated: true, escalated_at: now }
-          : a,
-      ),
-    })),
-  );
-
-  try {
-    await escalateAlert(alertId);
-  } catch (e) {
-    alert(
-      "ส่งต่อทีมฉุกเฉินไม่สำเร็จ: " +
-        (e instanceof Error ? e.message : "unknown error"),
-    );
-    loadAll(); // ถ้า error ให้โหลดข้อมูลจริงกลับมา ยกเลิก optimistic update ที่ผิดพลาด
-  }
-}
-
-  async function handleResolve(alertId: number, note: string) {
-    if (!staff) {
-      alert("ไม่พบข้อมูลผู้ใช้ที่ login อยู่");
-      return;
-    }
-
-    const now = new Date().toISOString();
-    setPatients((prev) =>
-      prev.map((p) => ({
-        ...p,
-        alerts: p.alerts.map((a) =>
-          a.id === alertId
-            ? {
-                ...a,
-                resolved_at: now,
-                resolved_by: staff.id,
-                resolution_note: note,
-              }
-            : a,
-        ),
-      })),
-    );
-
-    try {
-      await resolveAlert(alertId, staff.id, note);
-    } catch (e) {
-      alert(
-        "Resolve ไม่สำเร็จ: " +
-          (e instanceof Error ? e.message : "unknown error"),
-      );
+      alert(`${failLabel}: ` + (e instanceof Error ? e.message : "unknown error"));
       loadAll();
     }
+  }
+
+  function handleAcknowledge(alertId: number) {
+    return runAction(
+      alertId,
+      { acknowledged_at: new Date().toISOString() },
+      () => acknowledgeAlert(alertId),
+      "Acknowledge ไม่สำเร็จ",
+    );
+  }
+
+  function handleEscalate(alertId: number) {
+    return runAction(
+      alertId,
+      { escalated: true, escalated_at: new Date().toISOString() },
+      () => escalateAlert(alertId),
+      "ส่งต่อทีมฉุกเฉินไม่สำเร็จ",
+    );
+  }
+
+  function handleResolve(alertId: number, note: string) {
+    return runAction(
+      alertId,
+      { resolved_at: new Date().toISOString(), resolution_note: note },
+      () => resolveAlert(alertId, note),
+      "Resolve ไม่สำเร็จ",
+    );
   }
 
   // เรียงตาม severity: คะแนนสูงสุดอยู่บนสุด
@@ -281,13 +196,10 @@ export default function Home() {
           <span className="hidden md:inline text-[11px] text-slate-400 font-mono">
             {patients.length} เตียง
           </span>
-          {staff && (
-            <span className="hidden md:inline text-[11px] text-slate-400">
-              {staff.full_name}{" "}
-              <span className="text-slate-600">({staff.role})</span>
-            </span>
-          )}
-          
+          <span className="hidden md:inline text-[11px] text-slate-400">
+            พยาบาล <span className="text-slate-600">(demo)</span>
+          </span>
+
           <Link
             href="/audit"
             className="p-2 rounded-md border border-slate-800 hover:bg-slate-900 text-white"
@@ -295,23 +207,6 @@ export default function Home() {
           >
             <ClipboardList size={16} />
           </Link>
-          {staff?.role === "admin" && (
-            <Link
-              href="/admin/users"
-              className="p-2 rounded-md border border-slate-800 hover:bg-slate-900 text-white"
-              title="จัดการบัญชีผู้ใช้งาน"
-            >
-              <Users size={16} />
-            </Link>
-          )}
-          <button
-            onClick={() =>
-              signOut().then(() => (window.location.href = "/login"))
-            }
-            className="text-[11px] text-red-300 border border-slate-800 rounded-md px-3 py-2 hover:bg-slate-900"
-          >
-            ออกจากระบบ
-          </button>
         </div>
       </header>
 

@@ -1,6 +1,7 @@
 export type MonitorType = "vent" | "iv" | "both";
 
-export type StaffRole = "nurse" | "physician" | "nurse_manager" | "rapid_response" | "biomed_it" | "executive" | "admin";
+// ระบบเหลือ role เดียว (DB บังคับด้วย constraint staff_profiles_nurse_only)
+export type StaffRole = "nurse";
 
 export interface Ward {
   id: string;
